@@ -1,49 +1,73 @@
-const $=s=>document.querySelector(s),app=$('#app'),PASS=70;
+const $=s=>document.querySelector(s),app=$('#app');
 let S={};try{S=JSON.parse(localStorage.getItem('ebac'))||{}}catch(e){}
 const save=()=>{try{localStorage.setItem('ebac',JSON.stringify(S))}catch(e){}};
-const st=id=>S[id]||(S[id]={att:0,best:0,bc:0,pass:false,set:0,draft:{},free:{},res:null});
+const st=id=>{const s=S[id]||(S[id]={});s.set=s.set||0;s.draft=s.draft||{};s.free=s.free||{};if(s.res===undefined)s.res=null;return s};
 const n=s=>String(s).toLowerCase().replace(/[’‘]/g,"'").replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim();
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fm=s=>esc(s).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
-const unlocked=i=>!LESSONS[i].soon&&(i===0||st(LESSONS[i-1].id).pass||st(LESSONS[i].id).att>0);
-const day=d=>d.toISOString().slice(0,10);
-function mark(){const t=day(new Date());S._d=S._d||[];if(!S._d.includes(t))S._d.push(t)}
-function streak(){const d=S._d||[];let k=0,x=new Date();if(!d.includes(day(x)))x.setDate(x.getDate()-1);while(d.includes(day(x))){k++;x.setDate(x.getDate()-1)}return k}
-const ring=(p,z=96)=>{const r=z/2-8,c=2*Math.PI*r,h=z/2;return `<svg class="ring" width="${z}" height="${z}"><defs><linearGradient id="rg"><stop offset="0" stop-color="#7c5cff"/><stop offset="1" stop-color="#00e0c6"/></linearGradient></defs><circle cx="${h}" cy="${h}" r="${r}" class="rb"/><circle cx="${h}" cy="${h}" r="${r}" class="rf" stroke-dasharray="${c*p/100} ${c}" transform="rotate(-90 ${h} ${h})"/><text x="50%" y="50%" dy=".35em" text-anchor="middle">${Math.round(p)}%</text></svg>`};
+// answers are stored without apostrophes/capitals for matching; restore them for display
+const CT={wont:"won't",dont:"don't",didnt:"didn't",doesnt:"doesn't",wouldnt:"wouldn't",couldnt:"couldn't",shouldnt:"shouldn't",hadnt:"hadn't",hasnt:"hasn't",isnt:"isn't",mustnt:"mustn't",neednt:"needn't",cant:"can't"};
+const disp=s=>s.replace(/\b[a-z]+\b/g,w=>CT[w]||w).replace(/\bi\b/g,'I').replace(/\bfrench\b/g,'French').replace(/\benglish\b/g,'English');
+const models=a=>{const seen=new Set();return a.filter(x=>{const k=n(x);if(seen.has(k))return false;seen.add(k);return true}).map(disp)};
 function home(){
- const A=LESSONS.filter(l=>!l.soon),done=A.filter(l=>st(l.id).pass).length,xp=A.reduce((a,l)=>a+st(l.id).bc*10,0),T=A.filter(l=>st(l.id).att),avg=T.length?T.reduce((a,l)=>a+st(l.id).best,0)/T.length:0;
- app.innerHTML=`<section class="hero fade"><span class="pill"></span><h1>Master English.<br><span class="grad">One lesson at a time.</span></h1><p class="mut">Learn → practise → get graded. Score ${PASS}%+ to unlock the next lesson. Progress is saved on this device.</p></section>
-<section class="stats fade"><div class="card stat">${ring(done/LESSONS.length*100)}<div><b>${done}/${LESSONS.length}</b><span>lessons passed</span></div></div><div class="card stat"><div><div class="big">⚡ ${xp}</div><span>XP</span></div></div><div class="card stat"><div><div class="big">🔥 ${streak()}</div><span>day streak</span></div></div><div class="card stat"><div><div class="big">${Math.round(avg)}%</div><span>avg best score</span></div></div></section>
-<h2 class="sec">Lessons</h2><div class="grid">${LESSONS.map((l,i)=>{const s=st(l.id),u=unlocked(i);const b=l.soon?'<span class="badge">Coming soon</span>':!u?'<span class="badge">🔒 Locked</span>':s.pass?`<span class="badge p">✅ Passed · best ${s.best}%</span>`:s.att?`<span class="badge w">In progress · best ${s.best}%</span>`:'<span class="badge w">Start</span>';
- return `<${u?`a href="#/l/${l.id}"`:'div'} class="card les fade ${u?'':'off'}" style="animation-delay:${i*50}ms"><div class="em">${l.emoji}</div><small>Lesson ${l.id}</small><h3>${l.title}</h3>${b}</${u?'a':'div'}>`}).join('')}</div>
-<p class="foot"><button class="ghost" id="rst">Reset progress</button></p>`;
- $('#rst').onclick=()=>{if(confirm('Erase all progress?')){S={};save();home()}};
+ app.innerHTML=`<section class="hero fade"><span class="pill">Bac English · Grammar</span><h1>Master English.<br><span class="grad">One lesson at a time.</span></h1><p class="mut">Read the lesson, practise, then compare with the model answers. Your answers are saved on this device.</p></section>
+<a href="#/verbs" class="card les fade verbcard"><div class="em">📚</div><small>Reference</small><h3>Verb forms: irregular &amp; regular verbs</h3></a>
+<h2 class="sec">Lessons</h2><div class="grid">${LESSONS.map((l,i)=>`<a href="#/l/${l.id}" class="card les fade" style="animation-delay:${i*40}ms"><div class="em">${l.emoji}</div><small>Lesson ${l.id}</small><h3>${l.title}</h3></a>`).join('')}</div>
+<p class="foot"><button class="ghost" id="rst">Clear saved answers</button></p>`;
+ $('#rst').onclick=()=>{if(confirm('Erase all saved answers?')){S={};save();home()}};
 }
 const G={fill:'Fill in the blank',tr:'Transformation',err:'Error correction'};
 function lesson(id){
- const i=LESSONS.findIndex(l=>l.id==id);if(i<0||!unlocked(i)){location.hash='#/';return}
+ const i=LESSONS.findIndex(l=>l.id==id);if(i<0){location.hash='#/';return}
  const L=LESSONS[i],s=st(id),sk=s.set%L.sets.length,Q=L.sets[sk],dr=s.draft[sk]||(s.draft[sk]={}),R=s.res;
  const sec=(t,b)=>`<div class="card sc fade"><h3>${t}</h3>${b}</div>`;let last='';
  const items=Q.map((q,k)=>{const h=q.t!==last?`<h4 class="grp">${G[q.t]}</h4>`:'';last=q.t;
   const inp=`<input data-k="${k}" value="${esc(dr[k]||'')}" ${R?'disabled':''} autocomplete="off" spellcheck="false" placeholder="${q.t==='fill'?'…':'Type your answer'}">`;
   const body=q.t==='fill'?`<span>${esc(q.q).replace('______',()=>inp)}</span>`:`<div>${esc(q.q)}</div>${inp}`;
-  return `${h}<div class="q ${R?(R.ok[k]?'ok':'bad'):''}"><span class="n">${k+1}</span>${body}${R&&!R.ok[k]?`<div class="fix">✓ ${esc(q.a[0])}</div>`:''}</div>`}).join('');
- const nx=LESSONS[i+1],nxHref=nx&&!nx.soon?`#/l/${nx.id}`:'#/';
- const res=R?`<div class="card res fade ${R.pct>=PASS?'pass':'fail'}" id="res">${ring(R.pct,110)}<div><h3>${R.c}/${Q.length} correct</h3><p>${R.pct>=PASS?'🔥 Lesson passed. Next one unlocked.':'Not yet. You need '+PASS+'%. Read the fixes, then try again.'}</p><small>Attempts: ${s.att} · Best: ${s.best}%</small></div></div>`:'';
+  let fb='',cls='';
+  if(R){const ok=q.a.map(n).includes(n(dr[k]||'')),m=models(q.a);cls=ok?'ok':'chk';
+   fb=ok?`<div class="fix">✓ Matches the model answer</div>`:`<div class="fix"><b>Model answer:</b> ${esc(m[0])}</div>`;
+   if(m.length>1)fb+=`<div class="alt">Also fine: ${m.slice(1).map(esc).join(' · ')}</div>`}
+  return `${h}<div class="q ${cls}"><span class="n">${k+1}</span>${body}${fb}</div>`}).join('');
+ const prev=LESSONS[i-1],next=LESSONS[i+1];
+ const note=R?`<div class="card note fade" id="res"><b>Compare your answers.</b> Green means it matches the model answer. Otherwise, check the grammar rather than the exact words: a different wording can still be correct.</div>`:'';
  app.innerHTML=`<a class="back" href="#/">← All lessons</a><header class="lh fade"><span class="em">${L.emoji}</span><div><small>Lesson ${L.id}</small><h1>${L.title}</h1></div></header>
 ${sec('💡 Explanation',`<p>${fm(L.intro)}</p>`)}
 ${sec('🧱 Form',`<div class="tw"><table><tr><th></th><th>Formula</th><th>Example</th></tr>${L.form.map(r=>`<tr><td>${esc(r[0])}</td><td>${fm(r[1])}</td><td>${fm(r[2])}</td></tr>`).join('')}</table></div>`)}
 ${sec('🎯 Uses',`<ul>${L.uses.map(u=>`<li>${fm(u)}</li>`).join('')}</ul>`)}
 ${sec('⚠️ Common mistakes',L.mistakes.map(m=>`<div class="mist"><div class="x">❌ ${fm(m[0])}</div><div class="v">✅ ${fm(m[1])}</div><small>${fm(m[2])}</small></div>`).join(''))}
 ${sec('📝 Bac tips',`<ul>${L.tips.map(u=>`<li>${fm(u)}</li>`).join('')}</ul>`)}
-<h2 class="sec">Practice</h2>${res}${items}
-<h4 class="grp">Free writing (not graded, auto-saved)</h4>${L.free.map((p,k)=>`<div><small>${9+k-0}. ${esc(p)}</small><textarea data-f="${k}">${esc(s.free[k]||'')}</textarea></div>`).join('')}
-<div class="actions">${!R?'<button id="chk">Check answers</button>':`<button id="retry">${R.pct>=PASS?'Practise again':'Try again'}</button>${R.pct>=PASS||s.pass?`<a class="btn" href="${nxHref}">${nx&&!nx.soon?'Next lesson →':'Home →'}</a>`:''}`}</div>`;
+<h2 class="sec">Practice</h2>${note}${items}
+<h4 class="grp">Free writing (not checked, auto-saved)</h4>${L.free.map((p,k)=>`<div><small>${Q.length+1+k}. ${esc(p)}</small><textarea data-f="${k}">${esc(s.free[k]||'')}</textarea></div>`).join('')}
+<div class="actions">${R?'<button id="retry">Practise again</button>':'<button id="chk">Show answers</button>'}</div>
+<nav class="nav">${prev?`<a class="ghost" href="#/l/${prev.id}">← Lesson ${prev.id}</a>`:'<span></span>'}${next?`<a class="ghost" href="#/l/${next.id}">Lesson ${next.id} →</a>`:'<a class="ghost" href="#/">All lessons →</a>'}</nav>`;
  document.querySelectorAll('input[data-k]').forEach(e=>e.oninput=()=>{dr[e.dataset.k]=e.value;save()});
  document.querySelectorAll('textarea[data-f]').forEach(e=>e.oninput=()=>{s.free[e.dataset.f]=e.value;save()});
- if($('#chk'))$('#chk').onclick=()=>{const ok=Q.map((q,k)=>q.a.map(n).includes(n(dr[k]||''))),c=ok.filter(Boolean).length,pct=Math.round(c/Q.length*100);
-  s.att++;if(pct>=s.best){s.best=pct;s.bc=c}if(pct>=PASS)s.pass=true;s.res={ok,c,pct};mark();save();lesson(id);$('#res').scrollIntoView({behavior:'smooth'})};
+ if($('#chk'))$('#chk').onclick=()=>{s.res={checked:true};save();lesson(id);$('#res').scrollIntoView({behavior:'smooth'})};
  if($('#retry'))$('#retry').onclick=()=>{s.res=null;s.set++;s.draft[s.set%L.sets.length]={};save();lesson(id);scrollTo(0,0)};
 }
-function route(){const m=location.hash.match(/#\/l\/(\d+)/);m?lesson(+m[1]):home();scrollTo(0,0)}
+function verbs(){
+ const G=VERBS.groups,irr=G.reduce((a,g)=>a+g.rows.length,0);
+ app.innerHTML=`<a class="back" href="#/">← All lessons</a><header class="lh fade"><span class="em">📚</span><div><small>Reference</small><h1>Verb forms</h1></div></header>
+<div class="card sc fade"><h3>💡 How to use the three forms</h3><ul><li><b>Base</b>: infinitive, present simple (I <b>go</b>).</li><li><b>Past simple</b> (form 2): finished past action (I <b>went</b> yesterday).</li><li><b>Past participle</b> (form 3): after have / had / will have (lessons 2, 5), in the passive (lesson 4) and in the third conditional (lesson 6).</li></ul></div>
+<div class="card sc fade"><h3>🔍 Regular or irregular? How to tell</h3><ul>
+<li><b>Regular</b>: the past simple and the past participle are both <b>base + -ed</b> (work → worked → worked). This is the normal rule, and all new verbs follow it (text → texted, download → downloaded).</li>
+<li><b>Irregular</b>: any other form (go → went → gone). You cannot guess it from the base alone, so you have to learn the list below. There are about 200 of them, but they are the most frequent verbs.</li>
+<li><b>Quick test</b>: if you are not sure, say the past form. If you must change the vowel, change the word, or keep it the same (cut → cut), it is irregular.</li>
+<li><b>Clues</b>: same form three times usually ends in -t / -d (cut, put, set). -ought / -aught is always irregular (bought, taught). The pattern -ing → -ang → -ung (sing, drink, swim) is irregular. But do not over-apply a pattern: show → showed → shown, and follow, borrow, allow are regular.</li></ul></div>
+<div class="card sc fade"><h3>✏️ Regular verbs: spelling of -ed</h3><ul>
+<li>Most verbs: add <b>-ed</b> (work → work<b>ed</b>).</li>
+<li>Ending in -e: add <b>-d</b> (live → live<b>d</b>).</li>
+<li>Consonant + y: change to <b>-ied</b> (study → stud<b>ied</b>). Vowel + y: just -ed (play → play<b>ed</b>).</li>
+<li>One syllable, consonant-vowel-consonant: double the last letter (stop → stop<b>ped</b>, plan → plan<b>ned</b>). Not for stress on the first syllable (visit → visit<b>ed</b>).</li></ul>
+<h4 class="grp">Pronunciation of -ed</h4><ul><li><b>/t/</b> after voiceless sounds: worked, helped, watched, asked</li><li><b>/d/</b> after voiced sounds and vowels: played, lived, called, opened</li><li><b>/ɪd/</b> after t or d: wanted, needed, started, decided</li></ul>
+<h4 class="grp">Common regular verbs</h4><div class="chips">${VERBS.regular.map(r=>`<span class="chip">${r[0]} → <b>${r[1]}</b></span>`).join('')}</div></div>
+<h2 class="sec">Irregular verbs (${irr})</h2>
+<div class="actions"><button class="ghost" id="hide">Hide forms 2 and 3 (self-test)</button></div>
+<div id="vlist">${G.map(g=>`<h4 class="grp">${esc(g.title)}</h4><p class="mut vnote">${esc(g.note)}</p><div class="card tw"><table class="vt"><tr><th>Base</th><th>Past simple</th><th>Past participle</th></tr>${g.rows.map(r=>`<tr><td>${esc(r[0])}</td><td class="f">${esc(r[1])}</td><td class="f">${esc(r[2])}</td></tr>`).join('')}</table></div>`).join('')}</div>`;
+ const v=$('#vlist');
+ v.onclick=e=>{const c=e.target.closest('td.f');if(c&&v.classList.contains('hide'))c.classList.toggle('rev')};
+ $('#hide').onclick=e=>{v.classList.toggle('hide');v.querySelectorAll('.rev').forEach(x=>x.classList.remove('rev'));e.target.textContent=v.classList.contains('hide')?'Show all forms':'Hide forms 2 and 3 (self-test)'};
+}
+function route(){const m=location.hash.match(/#\/l\/(\d+)/);location.hash==='#/verbs'?verbs():m?lesson(+m[1]):home();scrollTo(0,0)}
 addEventListener('hashchange',route);route();
